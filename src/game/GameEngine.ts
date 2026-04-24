@@ -9,9 +9,14 @@ export function createPRNG(seed: number) {
   };
 }
 
-export const G = 8; // Further reduced for smoother, slower movement
+// Constants
 export const PHYSICS_WIDTH = 1600;
 export const PHYSICS_HEIGHT = 900;
+export const G = 8;
+const TRAJECTORY_POINTS = 80;
+const SWITCH_COOLDOWN_TIME = 2.0;
+const SOFTENING_RADIUS = 20;
+const MAX_VELOCITY_STEP = 25;
 
 export class GameEngine {
   gameState: GameState;
@@ -20,6 +25,10 @@ export class GameEngine {
   timeScale: number = 1.0;
   lastDt: number = 1.0;
   lastTeleportTime: number = 0;
+  
+  // Optimization: Cache trajectory
+  private cachedTrajectoryVelocity: Vector2D = { x: 0, y: 0 };
+  private cachedTrajectory: Vector2D[] = [];
 
   constructor(level: number = 1) {
     this.gameState = {
@@ -216,8 +225,7 @@ export class GameEngine {
             const distSq = dx * dx + dy * dy;
             
             // Gravity with softening to prevent infinite acceleration near core
-            const softening = 20;
-            const dist = Math.sqrt(distSq + softening * softening);
+            const dist = Math.sqrt(distSq + SOFTENING_RADIUS * SOFTENING_RADIUS);
             const force = (G * obj.mass) / (dist * dist * dist); 
             accX += dx * force;
             accY += dy * force;
@@ -230,14 +238,13 @@ export class GameEngine {
     let nextY = currentY + (currentY - this.probe.prevPos.y) * dtRatio + accY * dtSq;
 
     // Velocity Capping for stability
-    const maxStep = 25;
     const dx = nextX - currentX;
     const dy = nextY - currentY;
     const stepDistSq = dx * dx + dy * dy;
-    if (stepDistSq > maxStep * maxStep) {
+    if (stepDistSq > MAX_VELOCITY_STEP * MAX_VELOCITY_STEP) {
         const stepDist = Math.sqrt(stepDistSq);
-        nextX = currentX + (dx / stepDist) * maxStep;
-        nextY = currentY + (dy / stepDist) * maxStep;
+        nextX = currentX + (dx / stepDist) * MAX_VELOCITY_STEP;
+        nextY = currentY + (dy / stepDist) * MAX_VELOCITY_STEP;
     }
 
     this.probe.prevPos = { x: currentX, y: currentY };
@@ -412,7 +419,7 @@ export class GameEngine {
   toggleState() {
     if (this.gameState.switchCooldown > 0) return;
     this.probe.isWaveState = !this.probe.isWaveState;
-    this.gameState.switchCooldown = 2.0; // 2 second cooldown
+    this.gameState.switchCooldown = SWITCH_COOLDOWN_TIME;
   }
 
   launch(velocity: Vector2D) {
@@ -424,7 +431,15 @@ export class GameEngine {
     };
   }
 
-  getTrajectory(velocity: Vector2D, points: number = 200): Vector2D[] {
+  getTrajectory(velocity: Vector2D, points: number = TRAJECTORY_POINTS): Vector2D[] {
+    // Optimization: Check if velocity changed significantly
+    const dvx = Math.abs(velocity.x - this.cachedTrajectoryVelocity.x);
+    const dvy = Math.abs(velocity.y - this.cachedTrajectoryVelocity.y);
+    
+    if (dvx < 0.001 && dvy < 0.001 && this.cachedTrajectory.length > 0) {
+      return this.cachedTrajectory;
+    }
+
     const trajectory: Vector2D[] = [];
     let tempX = this.probe.pos.x;
     let tempY = this.probe.pos.y;
@@ -436,6 +451,9 @@ export class GameEngine {
     const goalX = this.levelData.goalPos.x;
     const goalY = this.levelData.goalPos.y;
 
+    const dt = 1.6;
+    const dtSq = dt * dt;
+
     for (let i = 0; i < points; i++) {
         let accX = 0;
         let accY = 0;
@@ -446,17 +464,16 @@ export class GameEngine {
                 const dx = obj.pos.x - tempX;
                 const dy = obj.pos.y - tempY;
                 const distSq = dx * dx + dy * dy;
-                if (distSq > obj.radius * obj.radius) {
-                    const dist = Math.sqrt(distSq);
-                    const force = (G * obj.mass) / (distSq * dist);
-                    accX += dx * force;
-                    accY += dy * force;
-                }
+                
+                const dist = Math.sqrt(distSq + SOFTENING_RADIUS * SOFTENING_RADIUS);
+                const force = (G * obj.mass) / (distSq * dist);
+                accX += dx * force;
+                accY += dy * force;
             }
         }
 
-        const nextX = tempX + (tempX - prevX) + accX;
-        const nextY = tempY + (tempY - prevY) + accY;
+        const nextX = tempX + (tempX - prevX) + accX * dtSq;
+        const nextY = tempY + (tempY - prevY) + accY * dtSq;
 
         prevX = tempX;
         prevY = tempY;
@@ -472,6 +489,8 @@ export class GameEngine {
         if (dxGoal * dxGoal + dyGoal * dyGoal < 900) break;
     }
 
+    this.cachedTrajectoryVelocity = { ...velocity };
+    this.cachedTrajectory = trajectory;
     return trajectory;
   }
 

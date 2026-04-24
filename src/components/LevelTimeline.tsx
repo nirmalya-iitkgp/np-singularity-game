@@ -20,7 +20,7 @@ export const LevelTimeline: React.FC<LevelTimelineProps> = ({
 
   return (
     <div className="absolute top-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-6 pointer-events-auto z-[300]">
-      <div className="bg-black/60 backdrop-blur-2xl border border-white/10 rounded-full p-2 flex items-center gap-1 overflow-x-auto no-scrollbar mask-fade-edges shadow-2xl">
+      <div className="bg-black/60 backdrop-blur-2xl border border-white/10 rounded-full p-2.5 flex items-center gap-2 overflow-x-auto no-scrollbar mask-fade-edges shadow-2xl">
         {Array.from({ length: 40 }).map((_, i) => {
           const levelNum = i + 1;
           const currentEpoch = epochs.find(e => levelNum >= e.start && levelNum <= e.end);

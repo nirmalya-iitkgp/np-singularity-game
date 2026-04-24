@@ -39,30 +39,33 @@ export const UIOverlay: React.FC<UIOverlayProps> = ({
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-12 md:p-16 font-mono text-[#f0f0f0] select-none">
       <div /> {/* Top Spacer */}
 
-      {/* Top Left: Level Info - Shifted up for mobile vertical stacking */}
-      <div className="absolute top-28 left-8 md:left-16 flex flex-col gap-1 pointer-events-auto">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-[#555] uppercase tracking-widest font-black">Sequence</span>
-          <span className="text-[#00F0FF] text-3xl font-black italic select-none">{String(level).padStart(2, '0')}</span>
-          <div className="hidden sm:block ml-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-[#777] backdrop-blur-md">
-            {epochs.find(e => level >= e.start && level <= e.end)?.name} Epoch
+      {/* Top Section: Responsive Header */}
+      <div className="absolute top-24 md:top-28 left-0 right-0 px-8 md:px-16 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pointer-events-none">
+        {/* Top Left: Level Info */}
+        <div className="flex flex-col gap-1 pointer-events-auto">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-[#555] uppercase tracking-widest font-black">Sequence</span>
+            <span className="text-[#00F0FF] text-3xl font-black italic select-none">{String(level).padStart(2, '0')}</span>
+            <div className="hidden sm:block ml-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-[9px] font-black uppercase tracking-widest text-[#777] backdrop-blur-md">
+              {epochs.find(e => level >= e.start && level <= e.end)?.name} Epoch
+            </div>
+            <button 
+              onClick={onReset}
+              className="ml-2 p-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-full transition-all group active:scale-95"
+              title="Reset Sector"
+            >
+              <RefreshCw className="w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity" />
+            </button>
           </div>
-          <button 
-            onClick={onReset}
-            className="ml-2 p-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-full transition-all group active:scale-95"
-            title="Reset Sector"
-          >
-            <RefreshCw className="w-3 h-3 opacity-40 group-hover:opacity-100 transition-opacity" />
-          </button>
         </div>
-      </div>
 
-      {/* Top Right: Goal Requirement - Shifted down for mobile vertical stacking */}
-      <div className="absolute top-44 sm:top-28 right-8 md:right-16 text-right pointer-events-auto">
-        <div className="flex flex-col items-end gap-1">
-          <div className="text-[9px] text-[#555] uppercase tracking-widest font-bold">Extraction Quota</div>
-          <div className="text-lg font-black tracking-tighter text-[#FFD700]">
-            {Math.floor(stardust)} <span className="text-[10px] text-white/20">/</span> {requiredStardust}
+        {/* Top Right: Goal Requirement */}
+        <div className="text-left sm:text-right pointer-events-auto">
+          <div className="flex flex-col items-start sm:items-end gap-1">
+            <div className="text-[9px] text-[#555] uppercase tracking-widest font-bold">Extraction Quota</div>
+            <div className="text-lg font-black tracking-tighter text-[#FFD700]">
+              {Math.floor(stardust)} <span className="text-[10px] text-white/20">/</span> {requiredStardust}
+            </div>
           </div>
         </div>
       </div>

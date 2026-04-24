@@ -123,8 +123,6 @@ export default function App() {
           maxLevelReached={maxLevelReached} 
           onSelectLevel={(l) => {
             setLevel(l);
-            // Internal safety to ensure engine resets to new level constants
-            setTimeout(() => engineRef.current?.reset(), 50);
           }} 
         />
       )}

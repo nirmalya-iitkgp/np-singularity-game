@@ -51,9 +51,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
   const draw = useCallback((ctx: CanvasRenderingContext2D, engine: GameEngine, time: number) => {
     ctx.save();
     
-    // Screen Shake Implementation
+    // Screen Shake Implementation - Proportional to heat/collision
     if (engine.collided) {
-      const shakeAmt = 8;
+      const shakeAmt = 5 + (engine.gameState.heat / 20);
       ctx.translate((Math.random() - 0.5) * shakeAmt, (Math.random() - 0.5) * shakeAmt);
     }
 
@@ -62,13 +62,11 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
     ctx.fillRect(0, 0, PHYSICS_WIDTH, PHYSICS_HEIGHT);
 
     // Draw Particles/Stars in background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
     const stars = starsRef.current;
     for (let i = 0; i < stars.length; i++) {
        const star = stars[i];
-       ctx.beginPath();
-       ctx.arc(star.x, star.y, 1, 0, Math.PI * 2);
-       ctx.fill();
+       ctx.fillRect(star.x, star.y, 1.5, 1.5);
     }
 
     // Draw Objects
@@ -257,7 +255,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
       ctx.fill();
 
       // Get trajectory points
-      const trajectory = engine.getTrajectory(launchVelocity, 200);
+      const trajectory = engine.getTrajectory(launchVelocity);
       
       // Animated Trajectory (Moving Dots)
       const dashOffset = (-time / 10) % 36;
