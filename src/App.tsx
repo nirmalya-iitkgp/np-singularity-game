@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GameEngine } from './game/GameEngine';
 import { GameCanvas } from './components/GameCanvas';
 import { UIOverlay } from './components/UIOverlay';
+import { LevelTimeline } from './components/LevelTimeline';
 import { MenuOverlay } from './components/MenuOverlay';
 import { GameState } from './types';
 
 export default function App() {
   const [level, setLevel] = useState(1);
+  const [maxLevelReached, setMaxLevelReached] = useState(1);
   const [showMenu, setShowMenu] = useState(true);
   const engineRef = useRef<GameEngine | null>(null);
   
@@ -58,12 +60,16 @@ export default function App() {
 
   const handleNextLevel = useCallback(() => {
     if (level < 40) {
-      setLevel(l => l + 1);
+      const nextLvl = level + 1;
+      setLevel(nextLvl);
+      if (nextLvl > maxLevelReached) {
+        setMaxLevelReached(nextLvl);
+      }
     } else {
        // Loop back or end screen
        setLevel(1);
     }
-  }, [level]);
+  }, [level, maxLevelReached]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -110,6 +116,19 @@ export default function App() {
         onLoss={() => {}} 
       />
 
+      {/* Persistent Level Timeline - Only outside main menu to avoid overlapping title */}
+      {!showMenu && (
+        <LevelTimeline 
+          currentLevel={level} 
+          maxLevelReached={maxLevelReached} 
+          onSelectLevel={(l) => {
+            setLevel(l);
+            // Internal safety to ensure engine resets to new level constants
+            setTimeout(() => engineRef.current?.reset(), 50);
+          }} 
+        />
+      )}
+
       {/* Interface Overlay */}
       <UIOverlay 
         gameState={gameState}
@@ -122,25 +141,10 @@ export default function App() {
       {/* Home Screen */}
       {showMenu && <MenuOverlay onStart={() => setShowMenu(false)} />}
 
-      {/* Developer Console */}
-      {isDev && (
-        <div className="absolute top-4 left-4 z-[100] border border-cyan-500/20 bg-black/60 p-2 rounded flex items-center gap-2 pointer-events-auto">
-          <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-wider">Dev: Level Jump</span>
-          <input 
-            type="number" 
-            min="1" 
-            max="40" 
-            value={level} 
-            onChange={(e) => setLevel(Number(e.target.value))}
-            className="w-10 bg-black border border-white/10 text-white text-[10px] px-1"
-          />
-        </div>
-      )}
-
       {/* Decorative Vignette & Frame */}
-      <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_150px_rgba(0,0,0,0.8)]" />
-      <div className="absolute inset-0 border-[20px] border-[#000] pointer-events-none" />
-      <div className="absolute inset-0 border border-white/5 pointer-events-none" />
+      <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_150px_rgba(0,0,0,0.8)] z-[400]" />
+      <div className="absolute inset-0 border-[20px] border-[#000] pointer-events-none z-[400]" />
+      <div className="absolute inset-0 border border-white/5 pointer-events-none z-[400]" />
     </div>
   );
 }

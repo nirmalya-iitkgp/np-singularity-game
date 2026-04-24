@@ -30,6 +30,7 @@ export interface GameState {
   epoch: Epoch;
   integrity: number;
   status: 'playing' | 'preview' | 'won' | 'lost';
+  failureReason?: 'overheated' | 'insufficient_yield';
   score: number;
   stardust: number;
   requiredStardust: number;

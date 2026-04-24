@@ -347,12 +347,6 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
         engineRef.current.update(dt);
         const ctx = canvasRef.current?.getContext('2d');
         if (ctx) draw(ctx, engineRef.current, time);
-
-        if (engineRef.current.gameState.status === 'won') {
-            onWin();
-        } else if (engineRef.current.gameState.status === 'lost') {
-            onLoss();
-        }
     }
 
     requestRef.current = requestAnimationFrame(animate);

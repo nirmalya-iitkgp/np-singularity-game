@@ -19,7 +19,6 @@ export class GameEngine {
   levelData: LevelData;
   timeScale: number = 1.0;
   lastDt: number = 1.0;
-  lastDt: number = 1.0;
   lastTeleportTime: number = 0;
 
   constructor(level: number = 1) {
@@ -191,6 +190,7 @@ export class GameEngine {
 
     if (this.gameState.heat >= 100) {
         this.gameState.status = 'lost';
+        this.gameState.failureReason = 'overheated';
         return;
     }
 
@@ -308,8 +308,14 @@ export class GameEngine {
     // I'll keep the Win condition as reaching enough stardust and hitting goal
     // OR just hitting enough stardust? User didn't specify win change, 
     // but goal is now payout. Let's make the goal also trigger win IF quota met.
-    if (distToGoalSq < (radius + 35) * (radius + 35) && this.gameState.stardust >= this.gameState.requiredStardust) {
-       this.gameState.status = 'won';
+    if (distToGoalSq < (radius + 35) * (radius + 35)) {
+       if (this.gameState.stardust >= this.gameState.requiredStardust) {
+           this.gameState.status = 'won';
+       } else {
+           // Insufficient yield at portal
+           this.gameState.status = 'lost';
+           this.gameState.failureReason = 'insufficient_yield';
+       }
        return;
     }
 
@@ -406,7 +412,7 @@ export class GameEngine {
   toggleState() {
     if (this.gameState.switchCooldown > 0) return;
     this.probe.isWaveState = !this.probe.isWaveState;
-    this.gameState.switchCooldown = 3; // 3 second cooldown
+    this.gameState.switchCooldown = 2.0; // 2 second cooldown
   }
 
   launch(velocity: Vector2D) {
