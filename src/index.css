@@ -61,7 +61,7 @@ canvas {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  .mask-fade-edges {
-    mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  .mask-linear-fade {
+    mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
   }
 }

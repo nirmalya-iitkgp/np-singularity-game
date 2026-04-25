@@ -44,6 +44,11 @@ export class GameEngine {
       heat: 0,
       switchCooldown: 0,
       goalCollected: false,
+      launches: 0,
+      fragmentsCollected: 0,
+      totalFragments: 0,
+      levelStartTime: Date.now(),
+      sessionTimeLeft: 60,
     };
 
     this.levelData = this.generateLevel(level);
@@ -58,16 +63,14 @@ export class GameEngine {
 
   getEpochForLevel(level: number): Epoch {
     if (level <= 10) return 'Classical';
-    if (level <= 20) return 'Quantum';
-    if (level <= 30) return 'Relativity';
+    if (level <= 20) return 'Relativity';
     return 'Thermal';
   }
 
   generateLevel(level: number): LevelData {
     const rng = createPRNG(level * 4321 + 7);
-    const epoch = this.getEpochForLevel(level);
     
-    // Explicit Goal Target for "Target Bonus"
+    // Explicit Goal Target
     const goalPos = {
       x: PHYSICS_WIDTH * 0.85,
       y: PHYSICS_HEIGHT * (0.2 + rng() * 0.6),
@@ -76,69 +79,75 @@ export class GameEngine {
     let objects: GameObject[] = [];
     let dustPlaced = 0;
 
-    // Obstacle count: 3-5
-    const obstacleCount = 4 + Math.min(2, Math.floor(level / 5));
+    // Simplified logic: Only Planets and Portals
+    const planetCount = 3 + Math.min(3, Math.floor(level / 4));
+    const portalCount = level > 5 ? Math.min(2, Math.floor((level - 5) / 5)) : 0;
 
-    for (let i = 0; i < obstacleCount; i++) {
-        const typeValue = rng();
-        let type: GameObject['type'] = 'Planet';
+    const requiredDust = 15 + (level * 5);
+    const targetDust = requiredDust * 2;
 
-        // Planet in all levels logic
-        if (typeValue < 0.3) {
-            type = 'Planet';
-        } else {
-            if (epoch === 'Classical') type = 'Planet';
-            else if (epoch === 'Quantum') type = typeValue < 0.6 ? 'QuantumField' : 'Asteroid';
-            else if (epoch === 'Relativity') type = typeValue < 0.7 ? 'Portal' : 'Planet';
-            else type = typeValue < 0.6 ? 'Planet' : 'Nebula';
-        }
-
-        const x = PHYSICS_WIDTH * (0.2 + (i/obstacleCount) * 0.6) + rng() * 50;
+    // Place Planets
+    for (let i = 0; i < planetCount; i++) {
+        const x = PHYSICS_WIDTH * (0.15 + (i/planetCount) * 0.7) + (rng() - 0.5) * 100;
         const y = PHYSICS_HEIGHT * (0.15 + rng() * 0.7);
+        
+        const radius = 45 + rng() * 35;
+        const mass = 1200 + rng() * 2000;
+        const planetColors = ['#4444ff', '#ff4444', '#44ff44', '#ff8844', '#00f0ff', '#f000ff'];
+        
+        objects.push({ 
+            id: `planet-${i}`, 
+            pos: { x, y }, 
+            radius, 
+            type: 'Planet', 
+            mass,
+            color: planetColors[Math.floor(rng() * planetColors.length)]
+        });
 
-        if (type === 'Planet') {
-            const isSingularity = i === 0 && level % 10 === 0;
-            const radius = isSingularity ? 80 : 45 + rng() * 25;
-            const mass = isSingularity ? 6000 : 1200 + rng() * 1800;
-            objects.push({ id: `obj-${i}`, pos: { x, y }, radius, type, mass });
-
-            // Dust rings around planets
-            const dustCount = 12 + Math.floor(rng() * 10);
-            for (let j = 0; j < dustCount; j++) {
-                const angle = (j / dustCount) * Math.PI * 2;
-                const dist = radius + 35 + rng() * 45;
-                objects.push({
-                    id: `dust-${i}-${j}`,
-                    pos: { x: x + Math.cos(angle) * dist, y: y + Math.sin(angle) * dist },
-                    radius: 4, type: 'Stardust', collected: false
-                });
-                dustPlaced++;
-            }
-        } else if (type === 'QuantumField') {
+        // Dust rings: ensure we put plenty of dust
+        const dustInRing = Math.floor(targetDust / planetCount) + 5;
+        for (let j = 0; j < dustInRing; j++) {
+            const angle = (j / dustInRing) * Math.PI * 2 + rng();
+            const dist = radius + 40 + rng() * 60;
             objects.push({
-              id: `qfield-${i}`, pos: { x, y }, radius: 60, type
+                id: `dust-${i}-${j}`,
+                pos: { x: x + Math.cos(angle) * dist, y: y + Math.sin(angle) * dist },
+                radius: 4, type: 'Stardust', collected: false
             });
-        } else if (type === 'Asteroid') {
-            objects.push({ id: `asteroid-${i}`, pos: { x, y }, radius: 30, type });
-            for (let j = 0; j < 5; j++) {
-                objects.push({
-                    id: `dust-ast-${i}-${j}`,
-                    pos: { x: x + (rng() - 0.5) * 100, y: y + (rng() - 0.5) * 100 },
-                    radius: 3, type: 'Stardust', collected: false
-                });
-                dustPlaced++;
-            }
-        } else if (type === 'Portal') {
-            const idA = `portal-${i}-a`; const idB = `portal-${i}-b`;
-            objects.push({ id: idA, pos: { x, y }, radius: 28, type: 'Portal', targetId: idB });
-            objects.push({ id: idB, pos: { x: x + 250, y: PHYSICS_HEIGHT - y }, radius: 28, type: 'Portal', targetId: idA });
-            i++; 
-        } else if (type === 'Nebula') {
-            objects.push({ id: `nebula-${i}`, pos: { x, y }, radius: 130, type });
+            dustPlaced++;
         }
     }
 
-    this.gameState.optimumScore = (dustPlaced * 10) + 500;
+    // Place Portals (Wormholes)
+    for (let i = 0; i < portalCount; i++) {
+        const idA = `portal-${i}-a`; 
+        const idB = `portal-${i}-b`;
+        const xA = PHYSICS_WIDTH * (0.2 + rng() * 0.2);
+        const yA = PHYSICS_HEIGHT * (0.2 + rng() * 0.6);
+        const xB = PHYSICS_WIDTH * (0.6 + rng() * 0.2);
+        const yB = PHYSICS_HEIGHT * (0.2 + rng() * 0.6);
+
+        objects.push({ id: idA, pos: { x: xA, y: yA }, radius: 35, type: 'Portal', targetId: idB });
+        objects.push({ id: idB, pos: { x: xB, y: yB }, radius: 35, type: 'Portal', targetId: idA });
+    }
+
+    // Place Data Fragments
+    const fragmentCount = 2 + Math.floor(rng() * 2);
+    for (let i = 0; i < fragmentCount; i++) {
+      const fx = PHYSICS_WIDTH * (0.2 + rng() * 0.6);
+      const fy = PHYSICS_HEIGHT * (0.1 + rng() * 0.8);
+      objects.push({
+        id: `fragment-${i}`,
+        pos: { x: fx, y: fy },
+        radius: 12,
+        type: 'DataFragment',
+        collected: false
+      });
+    }
+
+    this.gameState.totalFragments = fragmentCount;
+    this.gameState.requiredStardust = requiredDust;
+    this.gameState.optimumScore = (dustPlaced * 10) + (fragmentCount * 5000) + 5000;
 
     return {
       objects,
@@ -187,6 +196,16 @@ export class GameEngine {
 
   update(dt: number) {
     if (this.gameState.status !== 'playing' || !this.probe.launched) return;
+
+    // Handle session timer
+    if (this.gameState.status === 'playing') {
+      this.gameState.sessionTimeLeft -= dt / 60; // dt is approx 1, so divide by 60 frames
+      if (this.gameState.sessionTimeLeft <= 0) {
+        this.gameState.sessionTimeLeft = 0;
+        this.gameState.status = 'lost';
+        this.gameState.failureReason = 'Session Timeout: Loop Synchronization Failed';
+      }
+    }
 
     // Heat and Cooldown Logic
     if (this.gameState.switchCooldown > 0) {
@@ -295,33 +314,35 @@ export class GameEngine {
     };
   }
 
+  calcDistSq(p1: Vector2D, p2: Vector2D) {
+    return Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2);
+  }
+
   checkCollisions(dt: number = 1) {
-    const { pos, radius, isWaveState } = this.probe;
+    const { pos, radius } = this.probe;
 
-    const dxGoal = pos.x - this.levelData.goalPos.x;
-    const dyGoal = pos.y - this.levelData.goalPos.y;
-    const distToGoalSq = dxGoal * dxGoal + dyGoal * dyGoal;
+    const distToGoalSq = this.calcDistSq(pos, this.levelData.goalPos);
     
-    // Target gives +20 yield once per level
-    if (distToGoalSq < (radius + 35) * (radius + 35)) {
-      if (!this.gameState.goalCollected) {
-        this.gameState.stardust += 20;
-        this.gameState.score += 2000;
-        this.gameState.goalCollected = true;
-      }
-    }
-
-    // Win check (manual finish condition needed? User said goal is payout now)
-    // I'll keep the Win condition as reaching enough stardust and hitting goal
-    // OR just hitting enough stardust? User didn't specify win change, 
-    // but goal is now payout. Let's make the goal also trigger win IF quota met.
-    if (distToGoalSq < (radius + 35) * (radius + 35)) {
+    // Win check
+    if (distToGoalSq < 48 * 48) {
        if (this.gameState.stardust >= this.gameState.requiredStardust) {
            this.gameState.status = 'won';
+           
+           const timeTaken = (Date.now() - this.gameState.levelStartTime) / 1000;
+           const timeBonus = Math.max(0, 10000 - Math.floor(timeTaken * 50));
+           const launchBonus = Math.max(0, 5000 - (this.gameState.launches - 1) * 1000);
+           const fragmentMultiplier = 1.0 + (this.gameState.fragmentsCollected * 0.5);
+           
+           this.gameState.score = Math.floor((this.gameState.score + timeBonus + launchBonus) * fragmentMultiplier);
        } else {
-           // Insufficient yield at portal
-           this.gameState.status = 'lost';
-           this.gameState.failureReason = 'insufficient_yield';
+           // Eye Magnetism or slow collection if hovering near
+           this.gameState.stardust += 2 * dt / 60;
+           this.gameState.score += 2;
+
+           if (distToGoalSq < 35 * 35 && this.gameState.stardust < this.gameState.requiredStardust) {
+              this.gameState.status = 'lost';
+              this.gameState.failureReason = 'insufficient_yield';
+           }
        }
        return;
     }
@@ -329,83 +350,60 @@ export class GameEngine {
     const objects = this.levelData.objects;
     const len = objects.length;
     for (let i = 0; i < len; i++) {
-      const obj = objects[i];
-      const dx = pos.x - obj.pos.x;
-      const dy = pos.y - obj.pos.y;
-      const distSq = dx * dx + dy * dy;
-      const combinedRadius = radius + obj.radius;
+        const obj = objects[i];
+        const dx = pos.x - obj.pos.x;
+        const dy = pos.y - obj.pos.y;
+        const distSq = dx * dx + dy * dy;
+        const combinedRadius = radius + obj.radius;
 
-      if (distSq < combinedRadius * combinedRadius) {
-        // Thermal Nebula logic - increases stardust collection for WAVE
-        if (obj.type === 'Nebula' && isWaveState) {
-           const rate = 1.0 * dt / 60; // Better yield in nebula for wave
-           this.gameState.stardust += rate;
-           this.gameState.score += rate * 100;
-        }
+        if (distSq < combinedRadius * combinedRadius) {
+            // Data Fragment Collection
+            if (obj.type === 'DataFragment' && !obj.collected) {
+               obj.collected = true;
+               this.gameState.fragmentsCollected++;
+               this.gameState.score += 1000;
+               // Bonus Stardust system: +15 stardust per fragment to help overcome quota
+               this.gameState.stardust += 15;
+            }
 
-        // Quantum Field - multiplies PARTICLE
-        if (obj.type === 'QuantumField' && !isWaveState) {
-           // Burst of score/dust
-           this.gameState.stardust += 5 * dt / 60;
-           this.gameState.score += 1000 * dt / 200;
-        }
+            // Stardust Collection
+            if (obj.type === 'Stardust' && !obj.collected) {
+               obj.collected = true;
+               this.gameState.stardust += 1;
+               this.gameState.score += 10;
+            }
 
-        // Stardust Collection
-        if (obj.type === 'Stardust' && !obj.collected) {
-           let canCollect = !isWaveState;
-           if (isWaveState && this.gameState.epoch === 'Quantum' && Math.random() < 0.1) {
-             canCollect = true; 
-           }
+            // Planet Collision
+            if (obj.type === 'Planet') {
+              if (distSq < (combinedRadius * 0.95) * (combinedRadius * 0.95)) {
+                 const dist = Math.sqrt(distSq);
+                 this.reflectProbe(dx/dist, dy/dist, 1.0);
+                 this.triggerCollision();
+                 this.gameState.heat += this.probe.isWaveState ? 2 : 8;
 
-           if (canCollect) {
-             obj.collected = true;
-             let yield_val = 1;
-             if (this.gameState.epoch === 'Relativity') {
-               yield_val = Math.floor(1 + (1 - this.timeScale) * 6);
-             }
-             this.gameState.stardust += yield_val;
-             this.gameState.score += yield_val * 10;
-           }
-        }
+                 const overstep = combinedRadius - dist + 2;
+                 const invDist = 1 / dist;
+                 this.probe.pos.x += dx * invDist * overstep;
+                 this.probe.pos.y += dy * invDist * overstep;
+                 return;
+              }
+            }
 
-        // Planet/Asteroid Collision -> Bounce depends on Mass
-        if (obj.type === 'Planet' || obj.type === 'Asteroid') {
-          if (distSq < (combinedRadius * 0.95) * (combinedRadius * 0.95)) {
-             const dist = Math.sqrt(distSq);
-             // Bounce with no speed change (multiplier 1.0)
-             this.reflectProbe(dx/dist, dy/dist, 1.0);
-             this.triggerCollision();
-             
-             // Heat penalty on physical collision
-             if (!this.probe.isWaveState) {
-                this.gameState.heat += 8; 
-             } else {
-                this.gameState.heat += 2;
-             }
-
-             // Prevent multiple frames of collision by moving probe slightly out
-             const overstep = combinedRadius - dist + 2;
-             const invDist = 1 / dist;
-             this.probe.pos.x += dx * invDist * overstep;
-             this.probe.pos.y += dy * invDist * overstep;
-             return;
-          }
-        }
-
-        if (obj.type === 'Portal' && obj.targetId) {
-            const now = Date.now();
-            if (now - this.lastTeleportTime > 800) {
-                const target = objects.find(o => o.id === obj.targetId);
-                if (target) {
-                    const vx = this.probe.pos.x - this.probe.prevPos.x;
-                    const vy = this.probe.pos.y - this.probe.prevPos.y;
-                    this.probe.pos = { x: target.pos.x, y: target.pos.y };
-                    this.probe.prevPos = { x: target.pos.x - vx, y: target.pos.y - vy };
-                    this.lastTeleportTime = now;
+            // Portal Logic
+            if (obj.type === 'Portal' && obj.targetId) {
+                const now = Date.now();
+                if (now - this.lastTeleportTime > 800) {
+                    const target = objects.find(o => o.id === obj.targetId);
+                    if (target) {
+                        const vx = this.probe.pos.x - this.probe.prevPos.x;
+                        const vy = this.probe.pos.y - this.probe.prevPos.y;
+                        this.probe.pos = { x: target.pos.x, y: target.pos.y };
+                        this.probe.prevPos = { x: target.pos.x - vx, y: target.pos.y - vy };
+                        this.lastTeleportTime = now;
+                    }
                 }
             }
         }
-      }
     }
   }
 
@@ -423,6 +421,10 @@ export class GameEngine {
   }
 
   launch(velocity: Vector2D) {
+    if (!this.probe.launched) {
+      this.gameState.levelStartTime = Date.now();
+    }
+    this.gameState.launches++;
     this.probe.launched = true;
     this.gameState.status = 'playing';
     this.probe.prevPos = {
@@ -499,8 +501,15 @@ export class GameEngine {
     this.gameState.integrity = 100;
     this.gameState.heat = 0;
     this.gameState.stardust = 0;
+    this.gameState.score = 0;
+    this.gameState.launches = 0;
+    this.gameState.fragmentsCollected = 0;
+    this.gameState.sessionTimeLeft = 60;
     this.gameState.goalCollected = false;
     this.gameState.switchCooldown = 0;
+    this.levelData.objects.forEach(obj => {
+      if ('collected' in obj) obj.collected = false;
+    });
     this.probe = {
       pos: { ...this.levelData.startPos },
       prevPos: { ...this.levelData.startPos },
@@ -508,5 +517,22 @@ export class GameEngine {
       isWaveState: false,
       launched: false,
     };
+  }
+
+  getHint(): string {
+    const level = this.gameState.level;
+    const hints = [
+      "Use gravitational slingshots from planets to gain momentum.",
+      "The eye portal requires a high stardust yield to stabilize.",
+      "Portals connect disparate points in space; look for their twin.",
+      "Wave mode allows passage through planetary hulls but builds heat.",
+      "Fragment collection exponentially increases your final score.",
+      "Conserve launches to maximize your efficiency bonus.",
+      "Planetary gravity works even in wave mode—don't lose control.",
+      "The session window is closing; speed is your ally here.",
+      "Large planets have deep gravity wells; enter with enough speed.",
+      "Data fragments are often hidden behind orbits; look closely."
+    ];
+    return hints[level % hints.length];
   }
 }

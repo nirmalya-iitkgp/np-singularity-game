@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GameEngine } from './game/GameEngine';
 import { GameCanvas } from './components/GameCanvas';
 import { UIOverlay } from './components/UIOverlay';
-import { LevelTimeline } from './components/LevelTimeline';
 import { MenuOverlay } from './components/MenuOverlay';
 import { GameState } from './types';
 
@@ -71,10 +70,22 @@ export default function App() {
     }
   }, [level, maxLevelReached]);
 
+  const handleJumpLevel = useCallback((l: number) => {
+    setLevel(l);
+    if (l > maxLevelReached) {
+      setMaxLevelReached(l);
+    }
+  }, [maxLevelReached]);
+
+  const getEngineHint = useCallback(() => {
+    return engineRef.current?.getHint() || "";
+  }, []);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space') {
+        e.preventDefault();
         handleToggleState();
       }
       if (e.code === 'KeyR') {
@@ -85,7 +96,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleToggleState, handleReset]);
 
-  const isDev = true; // Enabled for the user nirmalya.iitkharagpur@gmail.com
+  const isDev = true; 
 
   return (
     <div className="relative w-full h-screen bg-[#050505] overflow-hidden font-mono antialiased text-[#f0f0f0]">
@@ -116,32 +127,25 @@ export default function App() {
         onLoss={() => {}} 
       />
 
-      {/* Persistent Level Timeline - Only outside main menu to avoid overlapping title */}
+      {/* Interface Overlay */}
       {!showMenu && (
-        <LevelTimeline 
-          currentLevel={level} 
-          maxLevelReached={maxLevelReached} 
-          onSelectLevel={(l) => {
-            setLevel(l);
-          }} 
+        <UIOverlay 
+          gameState={gameState}
+          isWaveState={isWaveState}
+          onToggleState={handleToggleState}
+          onReset={handleReset}
+          onNextLevel={handleNextLevel}
+          onJumpLevel={handleJumpLevel}
+          getHint={getEngineHint}
         />
       )}
-
-      {/* Interface Overlay */}
-      <UIOverlay 
-        gameState={gameState}
-        isWaveState={isWaveState}
-        onToggleState={handleToggleState}
-        onReset={handleReset}
-        onNextLevel={handleNextLevel}
-      />
 
       {/* Home Screen */}
       {showMenu && <MenuOverlay onStart={() => setShowMenu(false)} />}
 
       {/* Decorative Vignette & Frame */}
       <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_150px_rgba(0,0,0,0.8)] z-[400]" />
-      <div className="absolute inset-0 border-[20px] border-[#000] pointer-events-none z-[400]" />
+      <div className="absolute inset-0 border-[8px] sm:border-[20px] border-[#000] pointer-events-none z-[400]" />
       <div className="absolute inset-0 border border-white/5 pointer-events-none z-[400]" />
     </div>
   );

@@ -61,12 +61,33 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
     ctx.fillStyle = '#050505';
     ctx.fillRect(0, 0, PHYSICS_WIDTH, PHYSICS_HEIGHT);
 
-    // Draw Particles/Stars in background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    // Draw Particles/Stars in background with Parallax
+    const probe = engine.probe;
+    const scrollX = (probe.pos.x - PHYSICS_WIDTH / 2) * 0.05;
+    const scrollY = (probe.pos.y - PHYSICS_HEIGHT / 2) * 0.05;
+
     const stars = starsRef.current;
     for (let i = 0; i < stars.length; i++) {
        const star = stars[i];
-       ctx.fillRect(star.x, star.y, 1.5, 1.5);
+       // Layer 1: Slow / Distant
+       const parallaxX = (star.x - scrollX) % PHYSICS_WIDTH;
+       const parallaxY = (star.y - scrollY) % PHYSICS_HEIGHT;
+       
+       const x = parallaxX < 0 ? parallaxX + PHYSICS_WIDTH : parallaxX;
+       const y = parallaxY < 0 ? parallaxY + PHYSICS_HEIGHT : parallaxY;
+
+       ctx.fillStyle = i % 2 === 0 ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 240, 255, 0.15)';
+       ctx.fillRect(x, y, 1.2, 1.2);
+
+       // Layer 2: Fast / Nearer (only for some stars)
+       if (i % 5 === 0) {
+          const p2X = (star.x - scrollX * 2.5) % PHYSICS_WIDTH;
+          const p2Y = (star.y - scrollY * 2.5) % PHYSICS_HEIGHT;
+          const x2 = p2X < 0 ? p2X + PHYSICS_WIDTH : p2X;
+          const y2 = p2Y < 0 ? p2Y + PHYSICS_HEIGHT : p2Y;
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+          ctx.fillRect(x2, y2, 2, 2);
+       }
     }
 
     // Draw Objects
@@ -75,18 +96,9 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
       const obj = objects[i];
       
       if (obj.type === 'Planet') {
-        const mass = obj.mass || 0;
-        let planetColor = '#1a1a1a'; 
-        let glowColor = 'rgba(255, 255, 255, 0.05)';
+        const planetColor = obj.color || '#1a1a1a'; 
+        const glowColor = obj.color ? `${obj.color}55` : 'rgba(255, 255, 255, 0.05)';
         
-        if (mass > 4000) {
-            planetColor = '#3a0a0a'; 
-            glowColor = 'rgba(255, 50, 50, 0.1)';
-        } else if (mass > 2000) {
-            planetColor = '#0a1a3a'; 
-            glowColor = 'rgba(50, 100, 255, 0.1)';
-        }
-
         // Gravitational Lensing effect
         ctx.save();
         ctx.beginPath();
@@ -104,6 +116,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
         ctx.shadowColor = glowColor;
         const gradient = ctx.createRadialGradient(obj.pos.x - obj.radius*0.3, obj.pos.y - obj.radius*0.3, 0, obj.pos.x, obj.pos.y, obj.radius);
         gradient.addColorStop(0, planetColor);
+        gradient.addColorStop(0.8, '#000');
         gradient.addColorStop(1, '#000');
         ctx.fillStyle = gradient;
         ctx.beginPath();
@@ -111,12 +124,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
         ctx.fill();
         
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.lineWidth = 1;
         ctx.stroke();
 
       } else if (obj.type === 'Asteroid') {
-        ctx.fillStyle = '#111';
+        ctx.fillStyle = obj.color || '#111';
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -174,11 +187,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
       } else if (obj.type === 'Nebula') {
         const nTime = time / 2000;
         const pulse = Math.sin(nTime * 2) * 0.05 + 0.1;
+        const nColor = obj.color || '#ff3200';
         
         const gradient = ctx.createRadialGradient(obj.pos.x, obj.pos.y, 0, obj.pos.x, obj.pos.y, obj.radius);
-        gradient.addColorStop(0, `rgba(255, 150, 0, ${pulse + 0.1})`);
-        gradient.addColorStop(0.6, `rgba(255, 50, 0, ${pulse * 0.5})`);
-        gradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
+        gradient.addColorStop(0, `${nColor}${Math.floor((pulse + 0.2) * 255).toString(16).padStart(2, '0')}`);
+        gradient.addColorStop(0.6, `${nColor}${Math.floor((pulse * 0.5) * 255).toString(16).padStart(2, '0')}`);
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
         ctx.fillStyle = gradient;
         ctx.beginPath();
         ctx.arc(obj.pos.x, obj.pos.y, obj.radius, 0, Math.PI * 2);
@@ -193,37 +207,99 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
             ctx.arc(obj.pos.x + Math.cos(angle) * r, obj.pos.y + Math.sin(angle) * r, 2, 0, Math.PI * 2);
             ctx.fill();
         }
+      } else if (obj.type === 'DataFragment' && !obj.collected) {
+        ctx.save();
+        ctx.translate(obj.pos.x, obj.pos.y);
+        ctx.rotate(time / 400);
+        
+        ctx.fillStyle = '#00F0FF';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00F0FF';
+        
+        ctx.beginPath();
+        ctx.moveTo(0, -obj.radius);
+        ctx.lineTo(obj.radius, 0);
+        ctx.lineTo(0, obj.radius);
+        ctx.lineTo(-obj.radius, 0);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Inner diamond
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(-obj.radius/3, -obj.radius/3, obj.radius/1.5, obj.radius/1.5);
+        
+        ctx.restore();
       }
     }
 
-    // Draw Goal (Enhanced Target)
+    // Draw Goal (The Eye of the Singularity)
     const goal = engine.levelData.goalPos;
     const goalCollected = engine.gameState.goalCollected;
+    const quotaMet = engine.gameState.stardust >= engine.gameState.requiredStardust;
     ctx.save();
     ctx.translate(goal.x, goal.y);
-    const rotation = time / 800;
+    const rotation = time / 600;
     
-    // Outer rotating structure
-    ctx.strokeStyle = goalCollected ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 215, 0, 0.4)';
-    ctx.lineWidth = 1;
+    // 1. Sclera / Outer Glow
+    const eyeRadius = 60;
+    const scleraGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, eyeRadius * 1.5);
+    scleraGrad.addColorStop(0, goalCollected ? 'rgba(255,255,255,0.2)' : 'rgba(255, 200, 0, 0.15)');
+    scleraGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = scleraGrad;
     ctx.beginPath();
-    for(let m=0; m<4; m++) {
-        ctx.rotate(Math.PI / 2);
-        ctx.moveTo(35, 0);
-        ctx.lineTo(35, 15);
-        ctx.lineTo(20, 35);
-    }
-    ctx.stroke();
+    ctx.arc(0, 0, eyeRadius * 1.5, 0, Math.PI * 2);
+    ctx.fill();
 
-    // Inner pulsing core
-    ctx.rotate(rotation);
-    ctx.fillStyle = goalCollected ? '#333' : '#fff';
-    ctx.shadowBlur = goalCollected ? 0 : 15;
-    ctx.shadowColor = '#FFD700';
+    // 2. Eye Shape (Eyelids)
+    ctx.strokeStyle = quotaMet ? '#00f0ff' : '#FFD700';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.rect(-10, -10, 20, 20);
+    // Top eyelid
+    ctx.moveTo(- eyeRadius, 0);
+    ctx.quadraticCurveTo(0, - eyeRadius * 0.8, eyeRadius, 0);
+    // Bottom eyelid
+    ctx.quadraticCurveTo(0, eyeRadius * 0.8, - eyeRadius, 0);
+    ctx.stroke();
+    
+    // 3. Iris (Pulsing / Multi-colored)
+    const irisRadius = 25 + Math.sin(time / 300) * 3;
+    const irisGrad = ctx.createRadialGradient(0, 0, 5, 0, 0, irisRadius);
+    if (quotaMet) {
+        irisGrad.addColorStop(0, '#fff');
+        irisGrad.addColorStop(0.3, '#00f0ff');
+        irisGrad.addColorStop(1, '#0055ff');
+    } else {
+        irisGrad.addColorStop(0, '#fff');
+        irisGrad.addColorStop(0.3, '#FFD700');
+        irisGrad.addColorStop(1, '#ff4400');
+    }
+    ctx.fillStyle = irisGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, irisRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Pupil (Black Hole Center)
+    ctx.fillStyle = '#000';
+    ctx.shadowBlur = quotaMet ? 15 : 5;
+    ctx.shadowColor = quotaMet ? '#00f0ff' : '#FFD700';
+    ctx.beginPath();
+    // Vertical slit pupil
+    ctx.ellipse(0, 0, 8, irisRadius * 0.8, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
+
+    // 5. Veins / Neural lines
+    ctx.strokeStyle = quotaMet ? 'rgba(0, 240, 255, 0.3)' : 'rgba(255, 215, 0, 0.2)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 8; i++) {
+        ctx.rotate(Math.PI / 4 + rotation * 0.2);
+        ctx.beginPath();
+        ctx.moveTo(irisRadius, 0);
+        ctx.lineTo(eyeRadius - 10, 0);
+        ctx.stroke();
+    }
+
     ctx.restore();
 
     // Trajectory Visualization
@@ -303,36 +379,80 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({ level, onWin, onLoss, en
         ctx.restore();
     }
 
-    // Draw Probe
-    const probe = engine.probe;
+    // Draw Probe (The Neural-Link Vessel)
+    const { pos, prevPos, radius, isWaveState } = probe;
+    const velocity = { x: pos.x - prevPos.x, y: pos.y - prevPos.y };
+    const probeAngle = Math.atan2(velocity.y, velocity.x);
     const heatFactor = engine.gameState.heat / 100;
     
-    // Base color or heat color
-    const baseColor = probe.isWaveState ? [255, 0, 255] : [0, 240, 255];
-    const heatColor = [255, 50, 0];
-    
-    const rPart = Math.floor(baseColor[0] + (heatColor[0] - baseColor[0]) * heatFactor);
-    const gPart = Math.floor(baseColor[1] + (heatColor[1] - baseColor[1]) * heatFactor);
-    const bPart = Math.floor(baseColor[2] + (heatColor[2] - baseColor[2]) * heatFactor);
-    const probeColorString = `rgb(${rPart},${gPart},${bPart})`;
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.rotate(probeAngle);
 
-    ctx.shadowBlur = 20 + heatFactor * 30;
-    ctx.shadowColor = probeColorString;
-    ctx.fillStyle = probeColorString;
-    ctx.beginPath();
-    ctx.arc(probe.pos.x, probe.pos.y, probe.radius, 0, Math.PI * 2);
-    ctx.fill();
-    
-    if (probe.isWaveState) {
-        ctx.globalAlpha = 0.2;
-        ctx.fillStyle = probeColorString;
+    if (!isWaveState) {
+        // Mode: Particle (Sleek Spaceship)
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 15 + heatFactor * 20;
+        ctx.shadowColor = heatFactor > 0.5 ? '#ff4400' : '#00f0ff';
+        
+        // Body
         ctx.beginPath();
-        ctx.arc(probe.pos.x, probe.pos.y, probe.radius * 2.5, 0, Math.PI * 2);
+        ctx.moveTo(14, 0);       // Nose
+        ctx.lineTo(-10, -10);   // Back wing tip
+        ctx.lineTo(-6, 0);       // Back notch
+        ctx.lineTo(-10, 10);    // Back wing tip
+        ctx.closePath();
         ctx.fill();
-        ctx.globalAlpha = 1.0;
+
+        // Cockpit Glow
+        ctx.fillStyle = heatFactor > 0.5 ? '#ff4400' : '#00f0ff';
+        ctx.beginPath();
+        ctx.arc(3, 0, 3, 0, Math.PI * 2);
+        ctx.fill();
+    } else {
+        // Mode: Wave (Laser Tip / Needle)
+        ctx.fillStyle = '#ff00ff';
+        ctx.shadowBlur = 25 + heatFactor * 20;
+        ctx.shadowColor = heatFactor > 0.7 ? '#ffffff' : '#ff00ff';
+        
+        // Needle Head
+        ctx.beginPath();
+        ctx.moveTo(18, 0);
+        ctx.lineTo(-8, -3);
+        ctx.lineTo(-8, 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Core Photon
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+        ctx.fill();
     }
 
     ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // Wave Mode Trail (Drawn behind the vessel in global space)
+    if (isWaveState) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 0, 255, 0.5)';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(prevPos.x, prevPos.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        
+        // Inner core trail
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(prevPos.x, prevPos.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        ctx.restore();
+    }
     ctx.restore();
   }, [level]); // Stable, only rebuild if level (bg stars/objects) changes substantially
 

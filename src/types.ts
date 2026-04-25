@@ -9,10 +9,11 @@ export interface GameObject {
   id: string;
   pos: Vector2D;
   radius: number;
-  type: 'Planet' | 'Asteroid' | 'Goal' | 'Sensor' | 'Nebula' | 'QuantumField' | 'Portal' | 'Stardust';
+  type: 'Planet' | 'Asteroid' | 'Goal' | 'Sensor' | 'Nebula' | 'QuantumField' | 'Portal' | 'Stardust' | 'DataFragment';
   mass?: number; // For gravity
   angle?: number; // For sensors
   beamWidth?: number; // For sensors
+  color?: string; // Hex color for rendering
   targetId?: string; // For Portals
   collected?: boolean;
 }
@@ -30,7 +31,7 @@ export interface GameState {
   epoch: Epoch;
   integrity: number;
   status: 'playing' | 'preview' | 'won' | 'lost';
-  failureReason?: 'overheated' | 'insufficient_yield';
+  failureReason?: string;
   score: number;
   stardust: number;
   requiredStardust: number;
@@ -39,6 +40,11 @@ export interface GameState {
   heat: number;
   switchCooldown: number;
   goalCollected: boolean;
+  launches: number;
+  fragmentsCollected: number;
+  totalFragments: number;
+  levelStartTime: number;
+  sessionTimeLeft: number;
 }
 
 export interface LevelData {
